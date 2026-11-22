@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}{{ t('out_title_' + kind) }} · {{ t('app_name') }}{% endblock %}
+{% block content %}
+<h1 style="font-size:clamp(28px,4vw,40px)">{{ t('out_title_' + kind) }}</h1>
+<p class="lead">{{ t('out_lead_' + kind) }}</p>
+
+<form class="card" method="post">
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <label for="o-d" style="margin-top:0">{{ t('out_district') }}</label>
+  <select id="o-d" name="district" required>
+    <option value="">–</option>
+    {% for d in districts %}<option>{{ d }}</option>{% endfor %}
+  </select>
+  <label for="o-a">{{ t('out_area') }}</label>
+  <input id="o-a" name="area" maxlength="120" placeholder="{{ t('out_area_hint') }}">
+  <label for="o-n">{{ t('out_note') }}</label>
+  <input id="o-n" name="note" maxlength="255">
+  <div class="hint">{{ t('out_privacy') }}</div>
+  <div style="margin-top:14px"><button class="btn">{{ t('out_send') }}</button></div>
+</form>
+<p class="alt"><a href="{{ url_for('outages.report_restored' if kind == 'outage' else 'outages.report_outage') }}">{{ t('out_switch_' + kind) }}</a></p>
+
+<div class="card">
+  <h2>{{ t('out_recent') }}</h2>
+  {% for r in recent %}
+    <p style="margin:8px 0;font-size:15px"><span class="status {{ 'failed' if r.kind == 'outage' else 'paid' }}">{{ t('out_kind_' + r.kind) }}</span>
+      <b>{{ r.district }}</b>{% if r.area %}, {{ r.area }}{% endif %}{% if r.note %} · {{ r.note }}{% endif %}<br>
+      <small class="muted">{{ r.when }} CAT</small></p>
+  {% else %}<p class="muted" style="margin:0">{{ t('out_none') }}</p>{% endfor %}
+</div>
+{% endblock %}
