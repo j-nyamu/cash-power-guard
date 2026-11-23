@@ -6,7 +6,8 @@ USE cashpower;
 -- (nothing yet)
 
 -- Ideas that are NOT in app/models.py yet (do not run until the models change too):
---   tariff_blocks, appliances, forecasts, alerts, ussd_sessions  -> features still to be built.
+--   tariff_blocks, appliances, forecasts, ussd_sessions  -> features still to be built.
+--   (payments, alerts, notify_prefs and outage_reports are now in 06_payments_alerts_outages.sql.)
 --   Phone-only (USSD) accounts would need:
 --     ALTER TABLE users MODIFY email VARCHAR(255) NULL, MODIFY pw_hash VARCHAR(255) NULL;
 --   Optional speed-ups for frequent lookups:
