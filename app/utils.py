@@ -4,6 +4,8 @@ import json
 import os
 import re
 import secrets
+import urllib.parse
+import urllib.request
 from datetime import datetime, timezone
 from functools import wraps
 from types import SimpleNamespace
@@ -11,7 +13,7 @@ from types import SimpleNamespace
 from flask import abort, current_app, g, redirect, session, url_for
 
 from .extensions import db
-from .models import Access, Activity, Meter
+from .models import Access, Activity, Meter, NotifyPref
 
 # ---------------------------------------------------------------- translations
 LANGS = {"en": "English", "rw": "Kinyarwanda"}
@@ -87,9 +89,37 @@ def row_ns(obj, **extra):
 
 
 # ---------------------------------------------------------------- sending messages
+def _intl(phone):
+    """0788123456 -> +250788123456, the form SMS providers want."""
+    return "+250" + phone[1:] if re.fullmatch(r"07\d{8}", phone or "") else phone
+
+
 def send_sms(phone, text):
-    """Plug a licensed SMS provider in here (e.g. Africa's Talking). Until then it only writes to the log."""
-    current_app.logger.info("SMS to %s: %s", phone, text)
+    """Send an SMS through Africa's Talking. Returns True if the provider accepted it.
+
+    With no CPG_AT_API_KEY it only writes to the log. Username 'sandbox' uses their simulator, so nothing is delivered.
+    """
+    cfg = current_app.config
+    if not cfg["AT_API_KEY"]:
+        current_app.logger.info("SMS to %s (no SMS provider set up): %s", phone, text)
+        return False
+    host = "api.sandbox.africastalking.com" if cfg["AT_USERNAME"] == "sandbox" else "api.africastalking.com"
+    fields = {"username": cfg["AT_USERNAME"], "to": _intl(phone), "message": text}
+    if cfg["AT_SENDER"]:
+        fields["from"] = cfg["AT_SENDER"]
+    req = urllib.request.Request(f"https://{host}/version1/messaging", data=urllib.parse.urlencode(fields).encode(),
+                                 headers={"apiKey": cfg["AT_API_KEY"], "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            body = json.load(resp)
+        people = body.get("SMSMessageData", {}).get("Recipients", [])
+        ok = bool(people) and all(p.get("statusCode") in (100, 101, 102) for p in people)  # processed / sent / queued
+        if not ok:
+            current_app.logger.error("SMS to %s was not accepted: %s", phone, body)
+        return ok
+    except Exception as e:  # network, bad key, bad answer ...
+        current_app.logger.error("SMS to %s failed: %s", phone, e)
+        return False
 
 
 def send_email(to, subject, body):
@@ -113,6 +143,30 @@ def send_email(to, subject, body):
     except Exception as e:  # network, login, bad address ...
         current_app.logger.error("Email to %s failed: %s", to, e)
         return False
+
+
+def prefs_for(user):
+    """What the person chose in Settings. No saved choice means both channels are on."""
+    row = db.session.get(NotifyPref, user.id)
+    return SimpleNamespace(email_on=row.email_on if row else 1, sms_on=row.sms_on if row else 1)
+
+
+def notify(user, subject, text, sms_text=None):
+    """Tell a person by email and/or SMS, as they chose in Settings. Never raises.
+    Returns what was tried, for example {'email': True, 'sms': False} (True = the provider accepted it)."""
+    sent = {}
+    p = prefs_for(user)
+    # Each channel is tried on its own: a broken email server must not stop the SMS, and neither may break a purchase.
+    for channel, wanted, send in (("email", p.email_on and user.email, lambda: send_email(user.email, subject, text)),
+                                  ("sms", p.sms_on and user.phone, lambda: send_sms(user.phone, sms_text or text))):
+        if not wanted:
+            continue
+        try:
+            sent[channel] = bool(send())
+        except Exception as e:
+            current_app.logger.error("notify %s failed for user %s: %s", channel, getattr(user, "id", "?"), e)
+            sent[channel] = False
+    return sent
 
 
 # ---------------------------------------------------------------- who may do what
