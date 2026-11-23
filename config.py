@@ -60,3 +60,14 @@ class Config:
 
     # Listed REG prices exclude VAT; 18% VAT is assumed (not yet confirmed with a real receipt).
     VAT_PCT = float(os.environ.get("CPG_VAT_PCT", "18"))
+
+    # Test-mode payments: a sandbox checkout page. No real money moves and no real token is made.
+    PAY_MIN_RWF = 100
+    PAY_MAX_RWF = 500000
+    PAY_TTL_MIN = 30     # minutes a checkout page stays open
+
+    # SMS through Africa's Talking. Username "sandbox" uses their free simulator (nothing is really delivered).
+    # With no API key the app only writes the message to the log.
+    AT_USERNAME = os.environ.get("CPG_AT_USERNAME", "sandbox")
+    AT_API_KEY = os.environ.get("CPG_AT_API_KEY", "")
+    AT_SENDER = os.environ.get("CPG_AT_SENDER", "")   # optional approved sender ID
