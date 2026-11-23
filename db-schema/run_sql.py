@@ -26,6 +26,7 @@ FILES = [
     "03_usage.sql",
     "04_activity.sql",
     "05_changes.sql",
+    "06_payments_alerts_outages.sql",
 ]
 
 HERE = pathlib.Path(__file__).resolve().parent
