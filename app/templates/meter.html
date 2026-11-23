@@ -28,6 +28,37 @@
   </div>
 </div>
 
+{% if rec %}
+<div class="card">
+  <h2>{{ t('rec_title') }}</h2>
+  {% if rec.enough %}
+    <p style="margin:0">{{ t('rec_enough').replace('{n}', rec.days|string) }}</p>
+  {% else %}
+    <div class="facts">
+      <div><small>{{ t('rec_buy') }}</small><div class="v">{{ '{:,}'.format(rec.rwf) }} <em>RWF</em></div></div>
+      <div><small>{{ t('rec_units') }}</small><div class="v">≈ {{ rec.kwh }} <em>kWh</em></div></div>
+      <div><small>{{ t('rec_covers') }}</small><div class="v">{{ rec.days }} <em>{{ t('days_word') }}</em></div></div>
+    </div>
+  {% endif %}
+  <form method="get" class="row" style="align-items:flex-end;margin-top:14px">
+    <div><label for="rec-days" style="margin-top:0">{{ t('rec_days') }}</label><input id="rec-days" name="days" type="number" min="1" max="90" value="{{ rec.days }}"></div>
+    <div style="flex:none"><button class="btn ghost small">{{ t('rec_update') }}</button></div>
+  </form>
+  <p class="hint-note">{{ t('rec_note') }}</p>
+</div>
+{% endif %}
+
+{% if role in ('owner','add') %}
+<form class="card" method="post" action="{{ url_for('payments.start', mid=m.id) }}" id="buy-form" data-quote="{{ url_for('payments.quote_api', mid=m.id) }}">
+  <h2>{{ t('buy_title') }}<span class="tag amber">{{ t('test_mode') }}</span></h2>
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <label for="b-rwf" style="margin-top:0">{{ t('amount_rwf') }}</label>
+  <input id="b-rwf" name="rwf" type="number" min="{{ pay_min }}" max="{{ pay_max }}" inputmode="numeric" value="{{ rec.rwf if rec and rec.rwf else '' }}" required>
+  <div class="hint" id="b-quote" aria-live="polite" data-idle="{{ t('buy_hint') }}" data-tpl="{{ t('buy_quote') }}">{{ t('buy_hint') }}</div>
+  <div style="margin-top:14px"><button class="btn">{{ t('buy_go') }}</button></div>
+</form>
+{% endif %}
+
 <div class="two">
 {% if role in ('owner','add') %}
 <form class="card" method="post" action="{{ url_for('usage.add_entry', mid=m.id) }}">
@@ -60,6 +91,17 @@
   </table></div>
   {% else %}<p class="muted" style="margin:0">{{ t('no_logs') }}</p>{% endif %}
 </div>
+
+{% if pays %}
+<div class="card">
+  <h2>{{ t('pay_history') }}<span class="tag amber">{{ t('test_mode') }}</span></h2>
+  <div class="scroll"><table>
+    <tr><th>{{ t('date') }}</th><th>{{ t('pay_ref') }}</th><th>RWF</th><th>kWh</th><th>{{ t('pay_status') }}</th></tr>
+    {% for p in pays %}<tr><td class="num">{{ p.created[:10] }}</td><td class="num">{% if p.user_id == user.id %}<a href="{{ url_for('payments.checkout', ref=p.ref) }}">{{ p.ref }}</a>{% else %}{{ p.ref }}{% endif %}</td>
+      <td class="num">{{ '{:,}'.format(p.rwf) }}</td><td class="num">≈ {{ p.kwh }}</td><td><span class="status {{ p.status }}">{{ t('pay_status_' + p.status) }}</span></td></tr>{% endfor %}
+  </table></div>
+</div>
+{% endif %}
 
 {% if role == 'owner' %}
 <div class="two">

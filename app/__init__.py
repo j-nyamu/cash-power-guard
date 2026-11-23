@@ -4,7 +4,10 @@
     meters.py    meters and the meter page
     members.py   inviting people to see a meter
     usage.py     purchases and readings
-    forecast.py  the calculation (units bought, days left)
+    forecast.py  the calculation (units bought, days left, how much to buy)
+    payments.py  test-mode payments (sandbox checkout)
+    alerts.py    low-balance alerts by email and SMS (run by send_alerts.py)
+    outages.py   outage and "power restored" reports
     views.py     landing page, dashboard, settings
 """
 import secrets
@@ -23,10 +26,10 @@ def create_app(overrides=None):
 
     db.init_app(app)
 
-    from . import auth, members, meters, models, usage, views  # noqa: F401  (models: so the tables are known)
+    from . import auth, members, meters, models, outages, payments, usage, views  # noqa: F401  (models: so the tables are known)
     from .utils import LANGS, fmt_phone, csrf_token, tr
 
-    for part in (views, auth, meters, usage, members):
+    for part in (views, auth, meters, usage, members, payments, outages):
         app.register_blueprint(part.bp)
 
     with app.app_context():
