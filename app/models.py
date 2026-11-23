@@ -92,6 +92,55 @@ class Device(Base):
     created = db.Column(db.String(32), nullable=False)
 
 
+class Payment(Base):
+    """A test-mode payment. Created when the person asks to buy, settled by the sandbox checkout page."""
+    __tablename__ = "payments"
+    __table_args__ = (CheckConstraint("status IN ('pending','paid','failed','cancelled')"),)
+    id = db.Column(db.Integer, primary_key=True)
+    ref = db.Column(db.String(20), nullable=False, unique=True)   # shown to the person: CPG-1A2B3C4D5E6F
+    meter_id = db.Column(db.Integer, db.ForeignKey("meters.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    rwf = db.Column(db.Integer, nullable=False)
+    kwh = db.Column(db.Float, nullable=False)        # units quoted when the payment was started (an estimate)
+    method = db.Column(db.String(10))                # mtn / airtel / card, set at checkout
+    status = db.Column(db.String(10), nullable=False, default="pending")
+    reason = db.Column(db.String(30))                # why it did not go through: wrong_pin, card_declined, expired, user
+    entry_id = db.Column(db.Integer)                 # the purchase Entry created when it was paid
+    created = db.Column(db.String(32), nullable=False)
+    paid_at = db.Column(db.String(32))
+
+
+class Alert(Base):
+    """A low-balance alert already sent for a meter. Removed when the balance recovers so it can fire again."""
+    __tablename__ = "alerts"
+    __table_args__ = (UniqueConstraint("meter_id", "level"),)
+    id = db.Column(db.Integer, primary_key=True)
+    meter_id = db.Column(db.Integer, db.ForeignKey("meters.id"), nullable=False)
+    level = db.Column(db.String(3), nullable=False)  # d3 = about 3 days left, d1 = about 1 day, out = ran out
+    sent = db.Column(db.String(32), nullable=False)
+
+
+class NotifyPref(Base):
+    """Whether a person wants alerts and receipts by email and by SMS. No row means both are on."""
+    __tablename__ = "notify_prefs"
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), primary_key=True)
+    email_on = db.Column(db.Integer, nullable=False, default=1)
+    sms_on = db.Column(db.Integer, nullable=False, default=1)
+
+
+class OutageReport(Base):
+    """Someone says the power is off (or back) in a district. Public and anonymous; user_id is kept if they were logged in."""
+    __tablename__ = "outage_reports"
+    __table_args__ = (CheckConstraint("kind IN ('outage','restored')"),)
+    id = db.Column(db.Integer, primary_key=True)
+    kind = db.Column(db.String(8), nullable=False)
+    district = db.Column(db.String(30), nullable=False)
+    area = db.Column(db.String(120))
+    note = db.Column(db.String(255))
+    user_id = db.Column(db.Integer)
+    created = db.Column(db.String(32), nullable=False)
+
+
 class Activity(Base):
     """The log the owner sees: who viewed, added, was invited, left."""
     __tablename__ = "activity"
