@@ -1,10 +1,10 @@
 """Pages that are not about one feature: landing page, welcome, dashboard, settings, error pages."""
-from flask import Blueprint, g, redirect, render_template, session, url_for
+from flask import Blueprint, flash, g, redirect, render_template, request, session, url_for
 
 from .extensions import db
 from .forecast import forecast
-from .models import Access, Device, Meter, User
-from .utils import login_required, row_ns, tr
+from .models import Access, Device, Meter, NotifyPref, User
+from .utils import login_required, prefs_for, row_ns, tr
 
 bp = Blueprint("views", __name__)
 
@@ -41,7 +41,22 @@ def dashboard():
 @login_required
 def settings():
     devs = Device.query.filter_by(user_id=g.user.id).order_by(Device.id.desc()).all()
-    return render_template("settings.html", devs=devs, current=session.get("device"))
+    return render_template("settings.html", devs=devs, current=session.get("device"), prefs=prefs_for(g.user))
+
+
+@bp.route("/settings/notify", methods=["POST"])
+@login_required
+def notify_settings():
+    """Choose whether alerts and receipts come by email, by SMS, or both."""
+    row = db.session.get(NotifyPref, g.user.id)
+    if not row:
+        row = NotifyPref(user_id=g.user.id)
+        db.session.add(row)
+    row.email_on = 1 if request.form.get("email") else 0
+    row.sms_on = 1 if request.form.get("sms") else 0
+    db.session.commit()
+    flash(tr("added_ok", g.lang), "ok")
+    return redirect(url_for("views.settings"))
 
 
 @bp.app_errorhandler(403)
