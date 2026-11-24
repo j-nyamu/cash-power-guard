@@ -1,4 +1,4 @@
-"""Low-balance alerts by email and SMS. Run once a day with `python send_alerts.py`.
+"""Low-balance alerts by email and SMS. Run once a day with `python send_alerts.py`, or set CPG_ALERT_EVERY_MIN to check while the app runs.
 
 Three levels: about 3 days left (d3), about 1 day left (d1) and ran out (out). Each level is sent once per meter.
 When the balance recovers (a top-up or a new reading) its row is removed, so the alert can fire again next time.

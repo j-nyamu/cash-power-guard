@@ -61,7 +61,15 @@ class Config:
     # Listed REG prices exclude VAT; 18% VAT is assumed (not yet confirmed with a real receipt).
     VAT_PCT = float(os.environ.get("CPG_VAT_PCT", "18"))
 
-    # Test-mode payments: a sandbox checkout page. No real money moves and no real token is made.
+    # Payments. With no Flutterwave key the app uses its own demo checkout (no real money, no real token).
+    # With a Flutterwave key the customer pays on Flutterwave's hosted page (MTN, Airtel or card).
+    # Test keys (FLWSECK_TEST-...) always work. A live key is ignored unless CPG_ALLOW_LIVE_PAYMENTS=1, because
+    # this app records purchases but does not itself issue the REG/EUCL electricity token.
+    FLW_SECRET_KEY = os.environ.get("CPG_FLW_SECRET_KEY", "")
+    FLW_WEBHOOK_HASH = os.environ.get("CPG_FLW_WEBHOOK_HASH", "")   # the "secret hash" set in Flutterwave > Settings > Webhooks
+    FLW_BASE = "https://api.flutterwave.com/v3"
+    ALLOW_LIVE_PAYMENTS = os.environ.get("CPG_ALLOW_LIVE_PAYMENTS", "0") == "1"
+    PUBLIC_URL = os.environ.get("CPG_PUBLIC_URL", "")               # e.g. https://yourname.pythonanywhere.com (else the request's own address)
     PAY_MIN_RWF = 100
     PAY_MAX_RWF = 500000
     PAY_TTL_MIN = 30     # minutes a checkout page stays open
@@ -74,3 +82,5 @@ class Config:
 
     # Shown on the Contact page. Leave empty and the page says that no address is set up yet.
     CONTACT_EMAIL = os.environ.get("CPG_CONTACT_EMAIL", "")
+    # Check for low balances while the app is running: minutes between checks, 0 = off (use send_alerts.py instead)
+    ALERT_EVERY_MIN = float(os.environ.get("CPG_ALERT_EVERY_MIN", "0"))
