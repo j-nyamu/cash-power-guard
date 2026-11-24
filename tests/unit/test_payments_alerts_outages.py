@@ -1,4 +1,4 @@
-"""Unit tests for payments.py (test-mode checkout), alerts.py, notifications, the recommended purchase and outages.py."""
+"""Unit tests for payments.py (demo checkout), alerts.py, notifications, the recommended purchase and outages.py."""
 import io
 import json
 import unittest
@@ -72,7 +72,7 @@ class RecommendTests(AppTestCase):
             self.assertEqual(self.c.get(f"/meter/{self.m.id}?days={bad}").status_code, 200, bad)
 
 
-# ---------------------------------------------------------------- test-mode payments
+# ---------------------------------------------------------------- demo payments
 class PaymentTests(AppTestCase):
     def setUp(self):
         super().setUp()
@@ -99,10 +99,12 @@ class PaymentTests(AppTestCase):
             self.start(bad)
         self.assertEqual(Payment.query.count(), 0)
 
-    def test_checkout_page_says_test_mode(self):
+    def test_checkout_page_says_it_is_a_demo(self):
         _, p = self.start()
         html = self.c.get(f"/pay/{p.ref}").data
-        self.assertIn(b"TEST MODE", html)
+        self.assertIn(b"Demo checkout", html)
+        self.assertNotIn(b"TEST MODE", html)
+        self.assertNotIn(b"Test mode", self.c.get(f"/meter/{self.m.id}").data)
         self.assertIn(p.ref.encode(), html)
 
     def test_mobile_money_success_credits_the_meter_once(self):
@@ -244,7 +246,7 @@ class PaymentTests(AppTestCase):
         self.assertEqual(mail.call_count, 1)
         self.assertEqual(sms.call_count, 1)
         self.assertIn(p.ref, mail.call_args[0][2])
-        self.assertIn("TEST", mail.call_args[0][2])
+        self.assertIn("Demo payment", mail.call_args[0][2])
 
     def test_a_broken_message_service_does_not_break_the_payment(self):
         with mock.patch("app.utils.send_email", side_effect=RuntimeError("smtp down")), \
