@@ -141,6 +141,14 @@ class OutageReport(Base):
     created = db.Column(db.String(32), nullable=False)
 
 
+class MeterSetting(Base):
+    """What the owner told us about a meter. daily_use = kWh a day they say they use, so a first forecast
+    (and low-balance alerts) can work before there are two meter readings."""
+    __tablename__ = "meter_settings"
+    meter_id = db.Column(db.Integer, db.ForeignKey("meters.id"), primary_key=True)
+    daily_use = db.Column(db.Float, nullable=False)
+
+
 class Activity(Base):
     """The log the owner sees: who viewed, added, was invited, left."""
     __tablename__ = "activity"
