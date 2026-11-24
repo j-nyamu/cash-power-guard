@@ -163,3 +163,7 @@ td{padding:11px 8px;border-bottom:1px dashed var(--line)}td.num{font-family:var(
  .mhead{grid-template-columns:1fr}.mhead .dial{margin:0 auto}
 }
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+
+.start-box{margin-top:20px;padding:16px;border:1px dashed var(--line);border-radius:12px;background:#FBFBFC}
+.start-box h3{margin:0 0 10px;font-size:15px}
+.legal p{margin:0 0 12px;line-height:1.65}.legal p:last-child{margin-bottom:0}

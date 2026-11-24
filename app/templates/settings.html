@@ -13,6 +13,10 @@
   <div class="hint">{{ t('notify_hint') }}</div>
   <div style="margin-top:14px"><button class="btn small">{{ t('save') }}</button></div>
 </form>
+<form class="card" method="post" action="{{ url_for('views.test_alert') }}">
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <button class="btn ghost small">{{ t('notify_test_btn') }}</button>
+</form>
 <div class="card">
   <h2>{{ t('devices') }}</h2>
   {% for d in devs %}<p style="margin:6px 0">{{ d.label }} {% if d.id == current %}<span class="pill">{{ t('this_device') }}</span>{% endif %}<br><small class="muted">{{ d.created[:10] }}</small></p>{% else %}<p class="muted">{{ t('no_devices') }}</p>{% endfor %}

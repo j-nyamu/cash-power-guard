@@ -34,6 +34,14 @@
     <div class="hint">{{ t('meter_hint') }}</div><div class="field-msg" id="meter-msg" aria-live="polite"></div>
     <label for="nickname">{{ t('meter_nickname') }}</label>
     <input id="nickname" name="nickname" maxlength="30" placeholder="{{ t('nickname_hint') }}" value="{{ form.get('nickname','') }}">
+    <div class="start-box">
+      <h3>{{ t('start_title') }}</h3>
+      <div class="row">
+        <div><label for="reg-bal" style="margin-top:0">{{ t('start_balance') }}</label><input id="reg-bal" name="start_balance" type="number" step="0.01" min="0" inputmode="decimal" value="{{ form.get('start_balance','') }}"></div>
+        <div><label for="reg-use" style="margin-top:0">{{ t('start_use') }}</label><input id="reg-use" name="start_use" type="number" step="0.1" min="0.1" inputmode="decimal" value="{{ form.get('start_use','') }}"></div>
+      </div>
+      <div class="hint">{{ t('start_hint') }}</div>
+    </div>
     <div class="row" style="margin-top:18px"><button class="btn ghost" data-go="-1">{{ t('back') }}</button><button class="btn" data-go="1">{{ t('next') }}</button></div>
   </section>
 
@@ -58,7 +66,7 @@
       <dt>{{ t('email') }}</dt><dd id="r_email"></dd>
       <dt>{{ t('meter_number') }}</dt><dd id="r_meter"></dd>
     </dl>
-    <label class="terms"><input type="checkbox" name="terms" value="1" required><span>{{ t('accept_terms') }}</span></label>
+    <label class="terms"><input type="checkbox" name="terms" value="1" required><span>{{ t('accept_terms') }} (<a href="{{ url_for('views.terms') }}" target="_blank" rel="noopener">{{ t('terms_title') }}</a>, <a href="{{ url_for('views.privacy') }}" target="_blank" rel="noopener">{{ t('privacy_title') }}</a>)</span></label>
     <div class="row" style="margin-top:18px"><button class="btn ghost" data-go="-1">{{ t('back') }}</button><button class="btn" type="submit">{{ t('send_code') if otp_required else t('signup') }}</button></div>
   </section>
 </form>
