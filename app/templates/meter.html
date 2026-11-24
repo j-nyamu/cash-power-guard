@@ -20,13 +20,28 @@
         <div><small>{{ t('est_left') }}</small><div class="v">{{ fc.balance }} <em>kWh</em></div></div>
         <div><small>{{ t('run_out_between') }}</small><div class="v">{{ fc.lo.strftime('%d/%m') }}<em> {{ t('and') }} </em>{{ fc.hi.strftime('%d/%m') }}</div></div>
         <div><small>{{ t('buy_by') }}</small><div class="v">{{ fc.buy_by.strftime('%d/%m') }}</div></div>
+        <div><small>{{ t('daily_avg') }}</small><div class="v">{{ fc.rate }} <em>{{ t('per_day') }}</em></div></div>
       </div>
       <p class="hint-note">{{ t('estimate_note') }} {{ t('range_pm') }}{{ fc.spread }}%.</p>
+      {% if fc.guessed %}<p class="hint-note">{{ t('guess_note') }}</p>{% endif %}
       <p class="hint-note">{% if calib[1] %}{{ t('calib_some').replace('{n}', calib[1]|string).replace('{p}', (calib[0]*100)|round|int|string) }}{% else %}{{ t('calib_none') }}{% endif %}</p>
     {% else %}<p class="muted" style="margin:0">{{ t('need_data') }}</p>{% endif %}
     </div>
   </div>
 </div>
+
+{% if not fc and role in ('owner','add') %}
+<form class="card" method="post" action="{{ url_for('usage.start_forecast', mid=m.id) }}">
+  <h2>{{ t('start_title') }}</h2>
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <div class="row">
+    <div><label for="s-bal" style="margin-top:0">{{ t('start_balance') }}</label><input id="s-bal" name="start_balance" type="number" step="0.01" min="0" inputmode="decimal" required></div>
+    <div><label for="s-use" style="margin-top:0">{{ t('start_use') }}</label><input id="s-use" name="start_use" type="number" step="0.1" min="0.1" inputmode="decimal" required></div>
+  </div>
+  <div class="hint">{{ t('start_hint') }}</div>
+  <div style="margin-top:14px"><button class="btn">{{ t('start_go') }}</button></div>
+</form>
+{% endif %}
 
 {% if rec %}
 <div class="card">
@@ -50,7 +65,7 @@
 
 {% if role in ('owner','add') %}
 <form class="card" method="post" action="{{ url_for('payments.start', mid=m.id) }}" id="buy-form" data-quote="{{ url_for('payments.quote_api', mid=m.id) }}">
-  <h2>{{ t('buy_title') }}<span class="tag amber">{{ t('test_mode') }}</span></h2>
+  <h2>{{ t('buy_title') }}</h2>
   <input type="hidden" name="csrf" value="{{ csrf() }}">
   <label for="b-rwf" style="margin-top:0">{{ t('amount_rwf') }}</label>
   <input id="b-rwf" name="rwf" type="number" min="{{ pay_min }}" max="{{ pay_max }}" inputmode="numeric" value="{{ rec.rwf if rec and rec.rwf else '' }}" required>
@@ -94,7 +109,7 @@
 
 {% if pays %}
 <div class="card">
-  <h2>{{ t('pay_history') }}<span class="tag amber">{{ t('test_mode') }}</span></h2>
+  <h2>{{ t('pay_history') }}</h2>
   <div class="scroll"><table>
     <tr><th>{{ t('date') }}</th><th>{{ t('pay_ref') }}</th><th>RWF</th><th>kWh</th><th>{{ t('pay_status') }}</th></tr>
     {% for p in pays %}<tr><td class="num">{{ p.created[:10] }}</td><td class="num">{% if p.user_id == user.id %}<a href="{{ url_for('payments.checkout', ref=p.ref) }}">{{ p.ref }}</a>{% else %}{{ p.ref }}{% endif %}</td>
