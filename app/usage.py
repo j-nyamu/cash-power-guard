@@ -6,7 +6,7 @@ from flask import Blueprint, abort, flash, g, redirect, request, url_for
 from .extensions import db
 from .forecast import bought_this_month_before, calibration, kwh_from_rwf
 from .models import Entry
-from .utils import get_meter, iso, log_act, login_required, now, tr
+from .utils import get_meter, iso, log_act, login_required, now, parse_start, save_start, tr
 
 bp = Blueprint("usage", __name__)
 
@@ -48,6 +48,27 @@ def add_entry(mid):
     db.session.add(Entry(meter_id=mid, user_id=g.user.id, kind=kind, day=day.isoformat(), rwf=rwf, kwh=kwh,
                          estimated=est, created=iso(now())))
     log_act(mid, f"added_{kind}", f"{kwh} kWh" + (f", {rwf} RWF" if rwf else ""))
+    db.session.commit()
+    flash(tr("added_ok", g.lang), "ok")
+    return redirect(url_for("meters.meter_page", mid=mid))
+
+
+@bp.route("/meter/<int:mid>/start", methods=["POST"])
+@login_required
+def start_forecast(mid):
+    """Give an existing meter a first forecast: the balance on the meter now and the kWh used a day."""
+    m, role = get_meter(mid)
+    if role not in ("owner", "add"):
+        abort(403)
+    try:
+        balance, daily = parse_start(request.form)
+    except ValueError:
+        flash(tr("err_start", g.lang), "err")
+        return redirect(url_for("meters.meter_page", mid=mid))
+    if balance is None or daily is None:
+        flash(tr("err_start_both", g.lang), "err")
+        return redirect(url_for("meters.meter_page", mid=mid))
+    save_start(m, g.user, balance, daily)
     db.session.commit()
     flash(tr("added_ok", g.lang), "ok")
     return redirect(url_for("meters.meter_page", mid=mid))

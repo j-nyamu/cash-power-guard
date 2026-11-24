@@ -71,3 +71,6 @@ class Config:
     AT_USERNAME = os.environ.get("CPG_AT_USERNAME", "sandbox")
     AT_API_KEY = os.environ.get("CPG_AT_API_KEY", "")
     AT_SENDER = os.environ.get("CPG_AT_SENDER", "")   # optional approved sender ID
+
+    # Shown on the Contact page. Leave empty and the page says that no address is set up yet.
+    CONTACT_EMAIL = os.environ.get("CPG_CONTACT_EMAIL", "")

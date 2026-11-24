@@ -8,7 +8,8 @@ from sqlalchemy.exc import IntegrityError
 from .extensions import db
 from .forecast import calibration, forecast, recommend
 from .models import Access, Activity, Entry, Meter, Payment, User
-from .utils import (get_meter, iso, log_act, login_required, now, parse, row_ns, tr, valid_meter)
+from .utils import (get_meter, iso, log_act, login_required, now, parse, parse_start, row_ns, save_start, tr,
+                    valid_meter)
 
 bp = Blueprint("meters", __name__)
 
@@ -18,11 +19,19 @@ bp = Blueprint("meters", __name__)
 def add_meter():
     meter = re.sub(r"\s", "", request.form.get("meter_no", ""))
     nick = request.form.get("nickname", "").strip()[:30] or "Meter"
+    try:
+        start = parse_start(request.form)
+    except ValueError:
+        flash(tr("err_start", g.lang), "err")
+        return redirect(url_for("views.dashboard"))
     if not valid_meter(meter):
         flash(tr("err_meter_invalid", g.lang), "err")
     else:
         try:
-            db.session.add(Meter(meter_no=meter, nickname=nick, owner_id=g.user.id, created=iso(now())))
+            row = Meter(meter_no=meter, nickname=nick, owner_id=g.user.id, created=iso(now()))
+            db.session.add(row)
+            db.session.flush()
+            save_start(row, g.user, *start)   # optional starting balance and daily use
             db.session.commit()
             flash(tr("added_ok", g.lang), "ok")
         except IntegrityError:

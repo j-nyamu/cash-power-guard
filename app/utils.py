@@ -6,14 +6,14 @@ import re
 import secrets
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from functools import wraps
 from types import SimpleNamespace
 
 from flask import abort, current_app, g, redirect, session, url_for
 
 from .extensions import db
-from .models import Access, Activity, Meter, NotifyPref
+from .models import Access, Activity, Entry, Meter, MeterSetting, NotifyPref
 
 # ---------------------------------------------------------------- translations
 LANGS = {"en": "English", "rw": "Kinyarwanda"}
@@ -79,6 +79,40 @@ def csrf_token():
     if "csrf" not in session:
         session["csrf"] = secrets.token_hex(16)
     return session["csrf"]
+
+
+def parse_start(form):
+    """The two optional boxes 'balance on the meter now' and 'kWh I use a day'.
+    Returns (balance, daily), either of which may be None. Raises ValueError for anything that is not a sensible number."""
+    def num(name, top):
+        raw = (form.get(name) or "").strip().replace(",", ".")
+        if not raw:
+            return None
+        v = float(raw)
+        if not 0 <= v <= top:        # also rejects nan and inf
+            raise ValueError(name)
+        return v
+    balance, daily = num("start_balance", 100000), num("start_use", 500)
+    if daily is not None and daily <= 0:
+        raise ValueError("start_use")
+    return balance, daily
+
+
+def save_start(meter, user, balance, daily):
+    """Save the starting balance as a first meter reading (today) and the daily use as a first guess.
+    Needs a balance; does nothing without one. Does not commit."""
+    if balance is None:
+        return
+    db.session.add(Entry(meter_id=meter.id, user_id=user.id, kind="reading", day=date.today().isoformat(),
+                         kwh=balance, created=iso(now())))
+    db.session.add(Activity(meter_id=meter.id, user_id=user.id, action="added_reading", detail=f"{balance} kWh",
+                            ts=iso(now())))
+    if daily:
+        row = db.session.get(MeterSetting, meter.id)
+        if row:
+            row.daily_use = daily
+        else:
+            db.session.add(MeterSetting(meter_id=meter.id, daily_use=daily))
 
 
 def row_ns(obj, **extra):

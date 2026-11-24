@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ t(page + '_title') }} · {{ t('app_name') }}{% endblock %}
+{% block content %}
+<h1>{{ t(page + '_title') }}</h1>
+<p class="lead">{{ t('legal_note') }}</p>
+<div class="card legal">
+  {% for i in range(1, count + 1) %}<p>{{ t(page + '_' + i|string) }}</p>{% endfor %}
+  {% if page == 'contact' %}<p>{% if email %}<a href="mailto:{{ email }}"><b>{{ email }}</b></a>{% else %}<span class="muted">{{ t('contact_none') }}</span>{% endif %}</p>{% endif %}
+</div>
+{% endblock %}

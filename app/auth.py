@@ -10,8 +10,8 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from .extensions import db
 from .models import Device, Meter, Otp, User
-from .utils import (fmt_phone, iso, login_required, mask_email, normalize_phone, now, parse, password_ok, send_email,
-                    send_sms, sha, tr, valid_meter)
+from .utils import (fmt_phone, iso, login_required, mask_email, normalize_phone, now, parse, parse_start, password_ok,
+                    save_start, send_email, send_sms, sha, tr, valid_meter)
 
 bp = Blueprint("auth", __name__)
 
@@ -135,7 +135,11 @@ def create_account(s):
         db.session.add(user)
         db.session.flush()  # gives the new row its number
         user.uid = f"CPG-{user.id:06d}"
-        db.session.add(Meter(meter_no=s["meter"], nickname=s["nick"], owner_id=user.id, created=iso(now())))
+        meter = Meter(meter_no=s["meter"], nickname=s["nick"], owner_id=user.id, created=iso(now()))
+        db.session.add(meter)
+        db.session.flush()
+        balance, daily = s.get("start") or (None, None)   # the optional "balance now / kWh a day" boxes
+        save_start(meter, user, balance, daily)
         db.session.commit()
         return user
     except IntegrityError:
@@ -192,12 +196,18 @@ def register():
             err = "err_password"
         elif not f.get("terms"):
             err = "err_terms"
+        start = (None, None)
+        if not err:
+            try:
+                start = parse_start(f)
+            except ValueError:
+                err = "err_start"
         if err:
             flash(tr(err, g.lang), "err")
             return render_template("register.html", form=f), 400
         session["signup"] = dict(name=name, email=email, phone=phone, meter=meter, nick=nick[:30],
                                  acct=acct if acct in ("household", "business", "landlord") else "household",
-                                 pw_hash=generate_password_hash(pw))
+                                 pw_hash=generate_password_hash(pw), start=list(start))
         if not current_app.config["OTP_REQUIRED"]:
             user = create_account(session["signup"])
             session.pop("signup", None)
