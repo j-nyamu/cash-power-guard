@@ -1,4 +1,4 @@
--- Mirrors app/models.py: Payment, Alert, NotifyPref, OutageReport.
+-- Mirrors app/models.py: Payment, Alert, NotifyPref, OutageReport, MeterSetting.
 -- Depends on: 01_auth.sql, 02_meters.sql
 -- The Flask app creates these tables by itself (db.create_all). Run this file only when you build the database by hand.
 USE cashpower;
@@ -51,4 +51,11 @@ CREATE TABLE outage_reports (                      -- public, anonymous reports 
   created   VARCHAR(32) NOT NULL,
   PRIMARY KEY (id),
   CONSTRAINT ck_outage_kind CHECK (kind IN ('outage','restored'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE meter_settings (                      -- what the owner said they use (kWh a day): a first guess until real readings exist
+  meter_id   INT NOT NULL,
+  daily_use  FLOAT NOT NULL,
+  PRIMARY KEY (meter_id),
+  CONSTRAINT fk_meter_settings_meter FOREIGN KEY (meter_id) REFERENCES meters (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
