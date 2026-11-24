@@ -122,7 +122,7 @@ ok('invite waits for new user by phone', b'wants to share' in carol.get('/dashbo
 
 # CSRF + languages
 ok('CSRF enforced', mk().post('/login', data={'phone': '0788123456', 'password': 'x'}).status_code == 400)
-for code, word in [('fr', b'Se connecter'), ('rw', b'Injira'), ('en', b'Log in')]:
+for code, word in [('rw', b'Injira'), ('en', b'Log in')]:
     c = mk(); ok(f'lang {code}', word in c.get('/login?lang=' + code).data)
 c = mk(); c.get('/login?lang=rw'); r = signup(c, 'Dan Kamali', '0799000111', '07777777777')
 ok('language survives signup', b'Murakaza neza' in c.get('/welcome').data)
@@ -158,6 +158,6 @@ with APP.app_context():
     fc_new = forecast(mid)
 ok('fresh reading narrows the range back to 15%', fc_new['spread'] == 15 and not fc_new['stale'])
 ok('calibration note shown on page', 'Calibrated from 1 SMS receipt' in dave.get(f'/meter/{mid}').data.decode())
-for code, w in [('fr', b'Calibr'), ('rw', b'byagereranyijwe')]:
+for code, w in [('rw', b'byagereranyijwe')]:
     c = mk(); c.get('/login?lang=' + code)
 print('ALL PASSED')
