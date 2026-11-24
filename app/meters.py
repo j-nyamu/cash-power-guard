@@ -2,13 +2,14 @@
 import re
 from datetime import date
 
-from flask import Blueprint, flash, g, redirect, render_template, url_for, request
+from flask import Blueprint, current_app, flash, g, redirect, render_template, url_for, request
 from sqlalchemy.exc import IntegrityError
 
 from .extensions import db
-from .forecast import calibration, forecast
-from .models import Access, Activity, Entry, Meter, User
-from .utils import (get_meter, iso, log_act, login_required, now, parse, row_ns, tr, valid_meter)
+from .forecast import calibration, forecast, recommend
+from .models import Access, Activity, Entry, Meter, Payment, User
+from .utils import (get_meter, iso, log_act, login_required, now, parse, parse_start, row_ns, save_start, tr,
+                    valid_meter)
 
 bp = Blueprint("meters", __name__)
 
@@ -18,11 +19,19 @@ bp = Blueprint("meters", __name__)
 def add_meter():
     meter = re.sub(r"\s", "", request.form.get("meter_no", ""))
     nick = request.form.get("nickname", "").strip()[:30] or "Meter"
+    try:
+        start = parse_start(request.form)
+    except ValueError:
+        flash(tr("err_start", g.lang), "err")
+        return redirect(url_for("views.dashboard"))
     if not valid_meter(meter):
         flash(tr("err_meter_invalid", g.lang), "err")
     else:
         try:
-            db.session.add(Meter(meter_no=meter, nickname=nick, owner_id=g.user.id, created=iso(now())))
+            row = Meter(meter_no=meter, nickname=nick, owner_id=g.user.id, created=iso(now()))
+            db.session.add(row)
+            db.session.flush()
+            save_start(row, g.user, *start)   # optional starting balance and daily use
             db.session.commit()
             flash(tr("added_ok", g.lang), "ok")
         except IntegrityError:
@@ -52,5 +61,15 @@ def meter_page(mid):
         acts = [row_ns(a, name=name) for a, name in
                 db.session.query(Activity, User.name).outerjoin(User, User.id == Activity.user_id)
                 .filter(Activity.meter_id == mid).order_by(Activity.id.desc()).limit(25).all()]
+    pays = None
+    if role in ("owner", "add"):  # payments are money: the owner sees all of them, a contributor only their own
+        q = Payment.query.filter_by(meter_id=mid)
+        if role != "owner":
+            q = q.filter_by(user_id=g.user.id)
+        pays = q.order_by(Payment.id.desc()).limit(10).all()
+    days = request.args.get("days", type=int)  # "cover me for N days"; empty = the rest of this month
+    rec = recommend(mid, min(max(days, 1), 90) if days else None)
+    cfg = current_app.config
     return render_template("meter.html", m=m, role=role, entries=entries, fc=forecast(mid), calib=calibration(mid),
-                           people=people, acts=acts, today=date.today().isoformat())
+                           people=people, acts=acts, today=date.today().isoformat(), rec=rec, pays=pays,
+                           pay_min=cfg["PAY_MIN_RWF"], pay_max=cfg["PAY_MAX_RWF"])
