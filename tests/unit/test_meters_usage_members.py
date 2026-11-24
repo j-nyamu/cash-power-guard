@@ -238,3 +238,115 @@ class PageAndSecurityTests(AppTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------------------------------------- starting balance and daily use
+from app.forecast import forecast  # noqa: E402
+from app.models import MeterSetting  # noqa: E402
+from app.utils import notify, parse_start  # noqa: E402
+
+
+class StartForecastTests(AppTestCase):
+    def test_parse_start_accepts_empty_and_sensible_numbers(self):
+        self.assertEqual(parse_start({}), (None, None))
+        self.assertEqual(parse_start({"start_balance": "28,5", "start_use": "3"}), (28.5, 3.0))
+        self.assertEqual(parse_start({"start_balance": "0", "start_use": ""}), (0.0, None))
+
+    def test_parse_start_rejects_junk(self):
+        for bad in ({"start_balance": "abc"}, {"start_balance": "-1"}, {"start_balance": "nan"}, {"start_balance": "inf"},
+                    {"start_balance": "9999999"}, {"start_use": "0"}, {"start_use": "-2"}, {"start_use": "9999"}):
+            with self.assertRaises(ValueError, msg=bad):
+                parse_start(bad)
+
+    def test_signing_up_with_a_start_gives_a_forecast_straight_away(self):
+        c, u, m = self.signed_in()   # no start boxes: no forecast yet
+        self.assertIsNone(forecast(m.id))
+        c2 = self.client()
+        r = self.register(c2, name="Bea Mutoni", phone="0733555111", meter="09876543210",
+                          start_balance="30", start_use="3")
+        self.assertEqual(r.status_code, 302, r.data[:300])
+        m2 = Meter.query.filter_by(meter_no="09876543210").one()
+        fc = forecast(m2.id)
+        self.assertEqual((fc["balance"], fc["rate"], fc["days"], fc["guessed"]), (30.0, 3.0, 10.0, True))
+        self.assertEqual(Entry.query.filter_by(meter_id=m2.id, kind="reading").one().kwh, 30)
+        self.assertEqual(db.session.get(MeterSetting, m2.id).daily_use, 3)
+
+    def test_bad_start_blocks_sign_up_and_keeps_what_was_typed(self):
+        c = self.client()
+        r = self.register(c, start_balance="abc", start_use="3")
+        self.assertEqual(r.status_code, 400)
+        self.assertIn(b"sensible numbers", r.data)
+        self.assertEqual(Meter.query.count(), 0)
+
+    def test_adding_a_meter_with_a_start(self):
+        c, u, _ = self.signed_in()
+        self.post(c, "/meters/add", meter_no="0999 9999 999", nickname="Shop", start_balance="12", start_use="2")
+        m = Meter.query.filter_by(meter_no="09999999999").one()
+        self.assertEqual(forecast(m.id)["days"], 6.0)
+        # a bad start adds nothing at all
+        self.post(c, "/meters/add", meter_no="0888 8888 888", nickname="Bad", start_balance="-3")
+        self.assertIsNone(Meter.query.filter_by(meter_no="08888888888").first())
+
+    def test_start_form_on_an_existing_meter(self):
+        c, u, m = self.signed_in()
+        page = c.get(f"/meter/{m.id}").data
+        self.assertIn(b"Start your forecast", page)
+        self.post(c, f"/meter/{m.id}/start", start_balance="20", start_use="4")
+        fc = forecast(m.id)
+        self.assertEqual((fc["days"], fc["guessed"]), (5.0, True))
+        self.assertNotIn(b"Start your forecast", c.get(f"/meter/{m.id}").data)   # the form is gone once there is a forecast
+        self.assertIn(b"Daily average", c.get(f"/meter/{m.id}").data)
+
+    def test_start_form_needs_both_numbers_and_the_right_role(self):
+        c, u, m = self.signed_in()
+        self.post(c, f"/meter/{m.id}/start", start_balance="20")
+        self.assertIsNone(forecast(m.id))
+        vc, viewer, _ = self.signed_in("Bob Mutoni", "0733555111", "09876543210")   # a second person with his own account
+        db.session.add(Access(meter_id=m.id, phone=viewer.phone, role="view", status="active", invited_by=u.id, created="x"))
+        db.session.commit()
+        self.assertEqual(self.post(vc, f"/meter/{m.id}/start", start_balance="20", start_use="2").status_code, 403)
+        self.assertIsNone(forecast(m.id))
+
+    def test_real_readings_replace_the_guess_and_narrow_the_range(self):
+        c, u, m = self.signed_in()
+        self.post(c, f"/meter/{m.id}/start", start_balance="30", start_use="3")
+        guessed = forecast(m.id)
+        for n, kwh in ((3, 30), (1, 24)):                     # two real readings: 3 kWh a day
+            db.session.add(Entry(meter_id=m.id, user_id=u.id, kind="reading", day=day(n), kwh=kwh, created="x"))
+        db.session.commit()
+        real = forecast(m.id)
+        self.assertEqual(real["rate"], 3.0)
+        self.assertFalse(real["guessed"])
+        self.assertLess(real["spread"], guessed["spread"])
+
+
+class LegalPageAndTestAlertTests(AppTestCase):
+    def test_terms_privacy_and_contact_pages_open_for_anyone_in_both_languages(self):
+        c = self.client()
+        for path, word in (("/terms", b"Terms of use"), ("/privacy", b"Privacy policy"), ("/contact", b"Contact us")):
+            r = c.get(path)
+            self.assertEqual(r.status_code, 200, path)
+            self.assertIn(word, r.data)
+        self.assertIn(b"Amabwiriza", c.get("/terms?lang=rw").data)
+        self.assertIn(b"not been set up", c.get("/contact").data)       # no address configured yet
+
+    def test_contact_page_shows_the_configured_address(self):
+        self.app.config["CONTACT_EMAIL"] = "team@example.rw"
+        self.assertIn(b"team@example.rw", self.app.test_client().get("/contact").data)
+
+    def test_sign_up_page_links_to_the_terms(self):
+        self.assertIn(b"/terms", self.app.test_client().get("/register").data)
+
+    def test_test_alert_goes_to_the_signed_in_person_only_and_is_rate_limited(self):
+        from unittest import mock
+        c, u, _ = self.signed_in()
+        with mock.patch("app.utils.send_email", return_value=True) as mail, mock.patch("app.utils.send_sms", return_value=True) as sms:
+            self.post(c, "/settings/test-alert")
+            self.assertEqual((mail.call_count, sms.call_count), (1, 1))
+            self.assertIn("test alert", mail.call_args[0][1].lower())
+            self.post(c, "/settings/test-alert")          # straight away again: refused
+            self.assertEqual((mail.call_count, sms.call_count), (1, 1))
+
+    def test_test_alert_needs_login(self):
+        r = self.app.test_client().post("/settings/test-alert")
+        self.assertIn(r.status_code, (302, 400, 401, 403))
