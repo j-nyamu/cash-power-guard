@@ -1,10 +1,10 @@
 """Pages that are not about one feature: landing page, welcome, dashboard, settings, error pages."""
-from flask import Blueprint, g, redirect, render_template, session, url_for
+from flask import Blueprint, current_app, flash, g, redirect, render_template, request, session, url_for
 
 from .extensions import db
 from .forecast import forecast
-from .models import Access, Device, Meter, User
-from .utils import login_required, row_ns, tr
+from .models import Access, Device, Meter, NotifyPref, User
+from .utils import iso, login_required, notify, now, parse, prefs_for, row_ns, tr
 
 bp = Blueprint("views", __name__)
 
@@ -41,7 +41,61 @@ def dashboard():
 @login_required
 def settings():
     devs = Device.query.filter_by(user_id=g.user.id).order_by(Device.id.desc()).all()
-    return render_template("settings.html", devs=devs, current=session.get("device"))
+    return render_template("settings.html", devs=devs, current=session.get("device"), prefs=prefs_for(g.user))
+
+
+@bp.route("/settings/notify", methods=["POST"])
+@login_required
+def notify_settings():
+    """Choose whether alerts and receipts come by email, by SMS, or both."""
+    row = db.session.get(NotifyPref, g.user.id)
+    if not row:
+        row = NotifyPref(user_id=g.user.id)
+        db.session.add(row)
+    row.email_on = 1 if request.form.get("email") else 0
+    row.sms_on = 1 if request.form.get("sms") else 0
+    db.session.commit()
+    flash(tr("added_ok", g.lang), "ok")
+    return redirect(url_for("views.settings"))
+
+
+@bp.route("/settings/test-alert", methods=["POST"])
+@login_required
+def test_alert():
+    """Send one sample alert to the signed-in person, so email and SMS can be checked without waiting for a low balance."""
+    last = session.get("last_test")
+    if last and (now() - parse(last)).total_seconds() < 30:  # a small brake against SMS spam
+        flash(tr("notify_test_wait", g.lang), "err")
+    else:
+        session["last_test"] = iso(now())
+        sent = notify(g.user, tr("notify_test_subject", g.lang), tr("notify_test_text", g.lang))
+        ok = any(sent.values())
+        flash(tr("notify_test_ok" if ok else "notify_test_none", g.lang), "ok" if ok else "err")
+    return redirect(url_for("views.settings"))
+
+
+# Terms, Privacy and Contact: plain pages whose paragraphs live in the translation files (terms_1, terms_2 ...).
+LEGAL_PARAGRAPHS = {"terms": 6, "privacy": 7, "contact": 2}
+
+
+def _legal(page):
+    return render_template("legal.html", page=page, count=LEGAL_PARAGRAPHS[page],
+                           email=current_app.config["CONTACT_EMAIL"])
+
+
+@bp.route("/terms")
+def terms():
+    return _legal("terms")
+
+
+@bp.route("/privacy")
+def privacy():
+    return _legal("privacy")
+
+
+@bp.route("/contact")
+def contact():
+    return _legal("contact")
 
 
 @bp.app_errorhandler(403)
