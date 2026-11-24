@@ -139,11 +139,41 @@ wirePasswordChecklist('rpw', 'rcf', 'rchecks', function (v) { var b = document.g
     if (!(m > 0) || !(u > 0)) { out.d.textContent = '–'; out.k.textContent = '–'; out.t.textContent = '–'; if (out.r) out.r.innerHTML = ''; return; }
     var c = calc(m, Math.max(used, 0)), days = Math.floor(c.total / u);
     var buy = new Date(); buy.setDate(buy.getDate() + Math.max(days - 2, 0));
-    var loc = document.documentElement.lang === 'fr' ? 'fr-FR' : 'en-GB';
+    var loc = 'en-GB';
     out.d.textContent = days; out.k.textContent = c.total.toFixed(1);
     out.t.textContent = buy.toLocaleDateString(loc, { weekday: 'short', day: 'numeric', month: 'short' });
     if (out.r) out.r.innerHTML = c.rows.map(function (r) { return '<div><span>' + r.label + '</span><b>' + r.kwh.toFixed(1) + ' kWh</b></div>'; }).join('');
   }
   [rwf, use, usedEl].forEach(function (el) { if (el) el.addEventListener('input', run); });
   run();
+})();
+
+// Meter page: live estimate of the kWh an amount will buy (the server does the maths, so it matches the receipt)
+(function () {
+  var f = document.getElementById('buy-form');
+  if (!f) return;
+  var rwf = f.querySelector('[name=rwf]'), out = document.getElementById('b-quote');
+  var run = debounce(function () {
+    var v = parseInt(rwf.value, 10);
+    if (!(v > 0)) { out.textContent = out.dataset.idle; return; }
+    fetch(f.dataset.quote + '?rwf=' + v).then(function (r) { return r.json(); }).then(function (d) {
+      out.textContent = d.ok ? out.dataset.tpl.replace('{kwh}', d.kwh) : out.dataset.idle;
+    }).catch(function () {});
+  }, 300);
+  rwf.addEventListener('input', run); run();
+})();
+
+// Sandbox checkout: show only the fields for the chosen payment method
+(function () {
+  var form = document.getElementById('pay-form');
+  if (!form) return;
+  function run() {
+    var m = form.querySelector('[name=method]:checked').value;
+    form.querySelectorAll('[data-show]').forEach(function (box) {
+      var on = box.dataset.show.split(' ').indexOf(m) !== -1;
+      box.hidden = !on;
+      box.querySelectorAll('input').forEach(function (i) { i.disabled = !on; });
+    });
+  }
+  form.addEventListener('change', run); run();
 })();

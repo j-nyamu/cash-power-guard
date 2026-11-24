@@ -5,6 +5,14 @@
   <p class="muted" style="margin:0">{{ t('my_id') }}</p><div class="id-badge" style="font-size:18px">{{ user.uid }}</div>
   <p style="margin:12px 0 0"><b>{{ user.name }}</b><br>{{ fmt_phone(user.phone) }} · {{ user.email }}</p>
 </div>
+<form class="card" method="post" action="{{ url_for('views.notify_settings') }}">
+  <h2>{{ t('notify_title') }}</h2>
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <label class="terms" style="margin-top:0"><input type="checkbox" name="email" value="1" {% if prefs.email_on %}checked{% endif %}> {{ t('notify_email') }} ({{ user.email }})</label>
+  <label class="terms"><input type="checkbox" name="sms" value="1" {% if prefs.sms_on %}checked{% endif %}> {{ t('notify_sms') }} ({{ fmt_phone(user.phone) }})</label>
+  <div class="hint">{{ t('notify_hint') }}</div>
+  <div style="margin-top:14px"><button class="btn small">{{ t('save') }}</button></div>
+</form>
 <div class="card">
   <h2>{{ t('devices') }}</h2>
   {% for d in devs %}<p style="margin:6px 0">{{ d.label }} {% if d.id == current %}<span class="pill">{{ t('this_device') }}</span>{% endif %}<br><small class="muted">{{ d.created[:10] }}</small></p>{% else %}<p class="muted">{{ t('no_devices') }}</p>{% endfor %}

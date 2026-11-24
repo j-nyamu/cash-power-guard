@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}{{ t('pay_title') }} · {{ t('app_name') }}{% endblock %}
+{% block content %}
+<p class="mono-label"><a href="{{ url_for('meters.meter_page', mid=m.id) }}">← {{ m.nickname }}</a></p>
+<div class="testbar" role="note">{{ t('pay_test_banner') }}</div>
+<h1 style="font-size:clamp(28px,4vw,40px)">{{ t('pay_title') }}</h1>
+
+<div class="card">
+  <div class="facts">
+    <div><small>{{ t('meter_number') }}</small><div class="v" style="font-size:20px">{{ m.nickname }}</div></div>
+    <div><small>{{ t('amount_rwf') }}</small><div class="v">{{ '{:,}'.format(p.rwf) }}</div></div>
+    <div><small>{{ t('pay_units') }}</small><div class="v">≈ {{ p.kwh }} <em>kWh</em></div></div>
+  </div>
+  <p class="hint-note mono">{{ t('pay_ref') }}: {{ p.ref }} · <span class="status {{ p.status }}">{{ t('pay_status_' + p.status) }}</span></p>
+</div>
+
+{% if p.status == 'pending' %}
+<form class="card" method="post" action="{{ url_for('payments.confirm', ref=p.ref) }}" id="pay-form" autocomplete="off">
+  <h2>{{ t('pay_method') }}</h2>
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <div class="types">
+    <label class="type"><input type="radio" name="method" value="mtn" checked><b>{{ t('pay_m_mtn') }}</b><span>{{ t('pay_momo_d') }}</span></label>
+    <label class="type"><input type="radio" name="method" value="airtel"><b>{{ t('pay_m_airtel') }}</b><span>{{ t('pay_momo_d') }}</span></label>
+    <label class="type"><input type="radio" name="method" value="card"><b>{{ t('pay_m_card') }}</b><span>{{ t('pay_card_d') }}</span></label>
+  </div>
+  <div data-show="mtn airtel">
+    <label for="pay-phone">{{ t('phone') }}</label>
+    <input id="pay-phone" name="phone" type="tel" inputmode="tel" value="{{ user.phone }}">
+    <label for="pay-pin">{{ t('pay_pin') }}</label>
+    <input id="pay-pin" name="pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off">
+  </div>
+  <div data-show="card">
+    <label for="pay-card">{{ t('pay_card') }}</label>
+    <input id="pay-card" name="card" inputmode="numeric" autocomplete="off" placeholder="4242 4242 4242 4242">
+  </div>
+  <div class="demo" style="font-size:14px">
+    <b style="font:600 13px var(--mono);letter-spacing:.1em">{{ t('pay_hint_title') }}</b><br>
+    {{ t('pay_hint_pin').replace('{pin}', pin) }}<br>
+    {{ t('pay_hint_card') }}
+  </div>
+  <div style="margin-top:14px"><button class="btn">{{ t('pay_now') }} · {{ '{:,}'.format(p.rwf) }} RWF</button></div>
+</form>
+<form method="post" action="{{ url_for('payments.cancel', ref=p.ref) }}">
+  <input type="hidden" name="csrf" value="{{ csrf() }}">
+  <button class="btn ghost">{{ t('pay_cancel') }}</button>
+</form>
+
+{% elif p.status == 'paid' %}
+<div class="card">
+  <h2>{{ t('pay_done') }}</h2>
+  <p style="margin-top:0">{{ t('pay_done_d') }}</p>
+  <div class="review"><dl>
+    <dt>{{ t('pay_ref') }}</dt><dd class="mono">{{ p.ref }}</dd>
+    <dt>{{ t('pay_method_label') }}</dt><dd>{{ t('pay_m_' + p.method) }}</dd>
+    <dt>RWF</dt><dd>{{ '{:,}'.format(p.rwf) }}</dd>
+    <dt>kWh</dt><dd>≈ {{ p.kwh }}</dd>
+    <dt>{{ t('pay_paid_at') }}</dt><dd>{{ p.paid_at[:16].replace('T', ' ') }} UTC</dd>
+  </dl></div>
+  <div style="margin-top:18px"><a class="btn" href="{{ url_for('meters.meter_page', mid=m.id) }}">{{ t('pay_back') }}</a></div>
+</div>
+
+{% else %}
+<div class="flash err" role="status"><b>{{ t('pay_failed') }}.</b> {{ t('pay_reason_' + (p.reason or 'user')) }}</div>
+<form method="post" action="{{ url_for('payments.start', mid=m.id) }}">
+  <input type="hidden" name="csrf" value="{{ csrf() }}"><input type="hidden" name="rwf" value="{{ p.rwf }}">
+  <button class="btn">{{ t('pay_try_again') }}</button>
+</form>
+<p class="alt"><a href="{{ url_for('meters.meter_page', mid=m.id) }}">{{ t('pay_back') }}</a></p>
+{% endif %}
+{% endblock %}
