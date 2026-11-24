@@ -4,17 +4,19 @@ import json
 import os
 import re
 import secrets
-from datetime import datetime, timezone
+import urllib.parse
+import urllib.request
+from datetime import date, datetime, timezone
 from functools import wraps
 from types import SimpleNamespace
 
 from flask import abort, current_app, g, redirect, session, url_for
 
 from .extensions import db
-from .models import Access, Activity, Meter
+from .models import Access, Activity, Entry, Meter, MeterSetting, NotifyPref
 
 # ---------------------------------------------------------------- translations
-LANGS = {"en": "English", "fr": "Français", "rw": "Kinyarwanda"}
+LANGS = {"en": "English", "rw": "Kinyarwanda"}
 _DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "translations")
 _TEXT = {}
 for _code in LANGS:
@@ -79,6 +81,40 @@ def csrf_token():
     return session["csrf"]
 
 
+def parse_start(form):
+    """The two optional boxes 'balance on the meter now' and 'kWh I use a day'.
+    Returns (balance, daily), either of which may be None. Raises ValueError for anything that is not a sensible number."""
+    def num(name, top):
+        raw = (form.get(name) or "").strip().replace(",", ".")
+        if not raw:
+            return None
+        v = float(raw)
+        if not 0 <= v <= top:        # also rejects nan and inf
+            raise ValueError(name)
+        return v
+    balance, daily = num("start_balance", 100000), num("start_use", 500)
+    if daily is not None and daily <= 0:
+        raise ValueError("start_use")
+    return balance, daily
+
+
+def save_start(meter, user, balance, daily):
+    """Save the starting balance as a first meter reading (today) and the daily use as a first guess.
+    Needs a balance; does nothing without one. Does not commit."""
+    if balance is None:
+        return
+    db.session.add(Entry(meter_id=meter.id, user_id=user.id, kind="reading", day=date.today().isoformat(),
+                         kwh=balance, created=iso(now())))
+    db.session.add(Activity(meter_id=meter.id, user_id=user.id, action="added_reading", detail=f"{balance} kWh",
+                            ts=iso(now())))
+    if daily:
+        row = db.session.get(MeterSetting, meter.id)
+        if row:
+            row.daily_use = daily
+        else:
+            db.session.add(MeterSetting(meter_id=meter.id, daily_use=daily))
+
+
 def row_ns(obj, **extra):
     """Copy a model row into a plain object and add extra fields (for joined lists shown in templates)."""
     data = {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
@@ -87,9 +123,37 @@ def row_ns(obj, **extra):
 
 
 # ---------------------------------------------------------------- sending messages
+def _intl(phone):
+    """0788123456 -> +250788123456, the form SMS providers want."""
+    return "+250" + phone[1:] if re.fullmatch(r"07\d{8}", phone or "") else phone
+
+
 def send_sms(phone, text):
-    """Plug a licensed SMS provider in here (e.g. Africa's Talking). Until then it only writes to the log."""
-    current_app.logger.info("SMS to %s: %s", phone, text)
+    """Send an SMS through Africa's Talking. Returns True if the provider accepted it.
+
+    With no CPG_AT_API_KEY it only writes to the log. Username 'sandbox' uses their simulator, so nothing is delivered.
+    """
+    cfg = current_app.config
+    if not cfg["AT_API_KEY"]:
+        current_app.logger.info("SMS to %s (no SMS provider set up): %s", phone, text)
+        return False
+    host = "api.sandbox.africastalking.com" if cfg["AT_USERNAME"] == "sandbox" else "api.africastalking.com"
+    fields = {"username": cfg["AT_USERNAME"], "to": _intl(phone), "message": text}
+    if cfg["AT_SENDER"]:
+        fields["from"] = cfg["AT_SENDER"]
+    req = urllib.request.Request(f"https://{host}/version1/messaging", data=urllib.parse.urlencode(fields).encode(),
+                                 headers={"apiKey": cfg["AT_API_KEY"], "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            body = json.load(resp)
+        people = body.get("SMSMessageData", {}).get("Recipients", [])
+        ok = bool(people) and all(p.get("statusCode") in (100, 101, 102) for p in people)  # processed / sent / queued
+        if not ok:
+            current_app.logger.error("SMS to %s was not accepted: %s", phone, body)
+        return ok
+    except Exception as e:  # network, bad key, bad answer ...
+        current_app.logger.error("SMS to %s failed: %s", phone, e)
+        return False
 
 
 def send_email(to, subject, body):
@@ -113,6 +177,30 @@ def send_email(to, subject, body):
     except Exception as e:  # network, login, bad address ...
         current_app.logger.error("Email to %s failed: %s", to, e)
         return False
+
+
+def prefs_for(user):
+    """What the person chose in Settings. No saved choice means both channels are on."""
+    row = db.session.get(NotifyPref, user.id)
+    return SimpleNamespace(email_on=row.email_on if row else 1, sms_on=row.sms_on if row else 1)
+
+
+def notify(user, subject, text, sms_text=None):
+    """Tell a person by email and/or SMS, as they chose in Settings. Never raises.
+    Returns what was tried, for example {'email': True, 'sms': False} (True = the provider accepted it)."""
+    sent = {}
+    p = prefs_for(user)
+    # Each channel is tried on its own: a broken email server must not stop the SMS, and neither may break a purchase.
+    for channel, wanted, send in (("email", p.email_on and user.email, lambda: send_email(user.email, subject, text)),
+                                  ("sms", p.sms_on and user.phone, lambda: send_sms(user.phone, sms_text or text))):
+        if not wanted:
+            continue
+        try:
+            sent[channel] = bool(send())
+        except Exception as e:
+            current_app.logger.error("notify %s failed for user %s: %s", channel, getattr(user, "id", "?"), e)
+            sent[channel] = False
+    return sent
 
 
 # ---------------------------------------------------------------- who may do what
