@@ -20,8 +20,14 @@ def _secret():
 
 
 def _db_uri():
-    if os.environ.get("CPG_DATABASE_URL"):  # e.g. mysql+pymysql://user:pass@localhost/cash_power_guard
-        return os.environ["CPG_DATABASE_URL"]
+    database_url = os.environ.get("CPG_DATABASE_URL") or os.environ.get("DATABASE_URL")
+    if database_url:  # MySQL or PostgreSQL connection URL
+        # Render provides postgres:// or postgresql:// URLs; SQLAlchemy needs a driver.
+        if database_url.startswith("postgres://"):
+            database_url = "postgresql+psycopg://" + database_url[len("postgres://"):]
+        elif database_url.startswith("postgresql://"):
+            database_url = "postgresql+psycopg://" + database_url[len("postgresql://"):]
+        return database_url
     path = os.environ.get("CPG_DB") or os.path.join(INSTANCE, "cpg.db")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     return "sqlite:///" + path

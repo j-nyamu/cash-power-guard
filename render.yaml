@@ -1,0 +1,23 @@
+﻿services:
+  - type: web
+    name: cash-power-guard
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn run:app
+    envVars:
+      - key: CPG_SECRET
+        generateValue: true
+      - key: CPG_DATABASE_URL
+        fromDatabase:
+          name: cash-power-guard-db
+          property: connectionString
+      - key: CPG_DEMO_OTP
+        value: "0"
+      - key: CPG_OTP_REQUIRED
+        value: "0"
+databases:
+  - name: cash-power-guard-db
+    plan: free
+    databaseName: cashpower
+    user: cashpower
