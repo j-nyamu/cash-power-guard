@@ -7,7 +7,7 @@ from flask import current_app
 from sqlalchemy import func
 
 from .extensions import db
-from .models import Entry
+from .models import Entry, MeterSetting
 
 # RWF per kWh for each monthly block, REG residential tariff Oct 2025, excluding VAT: first 20 kWh, next 30, the rest.
 TARIFF = [(20, 89), (30, 310), (10 ** 9, 369)]
@@ -103,6 +103,12 @@ def forecast(meter_id):
         d = (date.fromisoformat(purchases[-1].day) - date.fromisoformat(purchases[0].day)).days
         if d >= 1:
             rates.append(sum(p.kwh for p in purchases[:-1]) / d)
+    guessed = False
+    if not rates:  # no measured rate yet: use what the owner said they use a day (a rougher guess)
+        guess = db.session.get(MeterSetting, meter_id)
+        if guess and guess.daily_use > 0:
+            rates.append(guess.daily_use)
+            guessed = True
     if not rates:
         return None
     rate = sum(rates[-3:]) / len(rates[-3:])
@@ -111,12 +117,12 @@ def forecast(meter_id):
     elapsed = max((today - date.fromisoformat(last.day)).days, 0)
     bal = max(last.kwh + added - rate * elapsed, 0.0)
     days = bal / rate
-    spread = min(0.15 + 0.03 * elapsed, 0.5)  # the older the last reading, the wider the range
+    spread = min((0.30 if guessed else 0.15) + 0.03 * elapsed, 0.5)  # older reading or a guessed rate: wider range
     lo, hi = days * (1 - spread), days * (1 + spread)
     return dict(balance=round(bal, 1), rate=round(rate, 2), days=round(days, 1),
                 lo=today + timedelta(days=int(lo)), hi=today + timedelta(days=int(round(hi))),
                 buy_by=today + timedelta(days=max(int(lo) - 2, 0)), low=lo <= 3,
-                age=elapsed, stale=elapsed >= 7, spread=round(spread * 100))
+                age=elapsed, stale=elapsed >= 7, spread=round(spread * 100), guessed=guessed)
 
 
 def recommend(meter_id, days=None):
