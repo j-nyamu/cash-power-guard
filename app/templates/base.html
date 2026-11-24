@@ -32,7 +32,8 @@
   {% block content %}{% endblock %}
 </div>{% endblock %}</main>
 <footer class="foot"><div class="wrap wide"><div><p><b>{{ t('app_name') }}</b> · {{ t('foot_made') }}</p><p>{{ t('foot_note') }}</p></div><div class="mono" style="font-size:12px">{% for code, name in langs.items() %}<a href="?lang={{ code }}">{{ name }}</a>{% if not loop.last %} · {% endif %}{% endfor %}
-  <p style="margin:8px 0 0"><a href="{{ url_for('outages.report_outage') }}">{{ t('out_title_outage') }}</a> · <a href="{{ url_for('outages.report_restored') }}">{{ t('out_title_restored') }}</a></p></div></div></footer>
+  <p style="margin:8px 0 0"><a href="{{ url_for('outages.report_outage') }}">{{ t('out_title_outage') }}</a> · <a href="{{ url_for('outages.report_restored') }}">{{ t('out_title_restored') }}</a></p>
+  <p style="margin:8px 0 0"><a href="{{ url_for('views.terms') }}">{{ t('terms_title') }}</a> · <a href="{{ url_for('views.privacy') }}">{{ t('privacy_title') }}</a> · <a href="{{ url_for('views.contact') }}">{{ t('contact_title') }}</a></p></div></div></footer>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>
