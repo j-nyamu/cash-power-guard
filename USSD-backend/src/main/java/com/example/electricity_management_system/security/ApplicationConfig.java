@@ -26,6 +26,7 @@ public class ApplicationConfig {
                                  .requestMatchers("/api/v1/users/all","/api/v1/tokens/all","/api/v1/meters/all","/api/v1/meters/new").hasRole("ADMIN")
                                 .requestMatchers("/api/v1/users/*","/api/v1/notifications/*","/api/v1/tokens/*","/api/v1/meters/*").authenticated()
                                 .requestMatchers("/api/v1/auth/?*").permitAll()
+                                .requestMatchers("/api/v1/ussd").permitAll() // aggregator callback; guarded by ussd.callback-secret
                         .anyRequest().permitAll()
                 )
 //

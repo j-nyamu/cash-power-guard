@@ -3,6 +3,7 @@ import com.example.electricity_management_system.dto.UserRegisterDto;
 import com.example.electricity_management_system.utils.EmailVerifiedStatus;
 import com.example.electricity_management_system.utils.PasswordVerifiedStatus;
 import com.example.electricity_management_system.utils.Role;
+import com.example.electricity_management_system.utils.SignupChannel;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
@@ -51,6 +52,14 @@ public class UserModel {
     public LocalDateTime emailVerificationOtpSentDate=LocalDateTime.now();
     @JsonIgnore
     public LocalDateTime passwordVerificationOtpSentDate=LocalDateTime.now();
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    public SignupChannel signupChannel=SignupChannel.WEB;
+    /** Wrong SMS codes entered on USSD; USSD locks after 3. Nullable so existing rows migrate cleanly. */
+    @JsonIgnore
+    public Integer ussdFailedAttempts=0;
+    @JsonIgnore
+    public LocalDateTime ussdLockedUntil;
 
     public UserModel(UserRegisterDto user) {
         this.names = user.names;
