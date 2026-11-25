@@ -9,6 +9,7 @@ import com.example.electricity_management_system.repository.PurchasedTokenReposi
 import com.example.electricity_management_system.repository.UserRepository;
 import com.example.electricity_management_system.repository.UssdSessionRepository;
 import com.example.electricity_management_system.service.PurchasedTokenServices;
+import com.example.electricity_management_system.sms.SmsDeliveryException;
 import com.example.electricity_management_system.sms.SmsSender;
 import com.example.electricity_management_system.utils.Role;
 import com.example.electricity_management_system.utils.SignupChannel;
@@ -148,7 +149,12 @@ public class UssdService {
         data.put("codeExpiresAt", now.plus(CODE_TTL).toString());
         setData(session, data);
         session.setState(UssdState.LOGIN_CODE);
-        sms.send(phone, "Your Cash Power USSD code is " + code + ". It expires in 5 minutes. Do not share it.");
+        try {
+            sms.send(phone, "Your Cash Power USSD code is " + code + ". It expires in 5 minutes. Do not share it.");
+        } catch (SmsDeliveryException e) {
+            log.error("Could not send USSD login code: {}", e.getMessage());
+            return UssdReply.end("We could not send your code by SMS. Please try again later.");
+        }
         return UssdReply.con("We sent a 6-digit code to you by SMS.\nEnter code:");
     }
 
@@ -387,10 +393,17 @@ public class UssdService {
             return UssdReply.end("Purchase failed: " + e.getMessage());
         }
         String formatted = TokenFormatter.formatToken(token.token);
-        sms.send(session.getPhone(), "Cash Power token for meter " + meterNumber + ": " + formatted
-                + " (" + token.tokenValueDays + " days, " + amount + " RWF).");
+        String smsNote = "\nWe also sent it by SMS.";
+        try {
+            sms.send(session.getPhone(), "Cash Power token for meter " + meterNumber + ": " + formatted
+                    + " (" + token.tokenValueDays + " days, " + amount + " RWF).");
+        } catch (SmsDeliveryException e) {
+            // The token is already created; show it on screen even if the SMS copy fails.
+            log.error("Could not send token SMS for meter {}: {}", meterNumber, e.getMessage());
+            smsNote = "\nWrite it down: SMS copy failed.";
+        }
         return UssdReply.end("Token: " + formatted + "\nMeter: " + meterNumber + "\nDays: " + token.tokenValueDays
-                + "\nWe also sent it by SMS.");
+                + smsNote);
     }
 
     // ---- recent tokens / check token -------------------------------------------------------
