@@ -6,6 +6,7 @@ import com.example.electricity_management_system.repository.MeterRepository;
 import com.example.electricity_management_system.repository.PurchasedTokenRepository;
 import com.example.electricity_management_system.repository.UserRepository;
 import com.example.electricity_management_system.repository.UssdSessionRepository;
+import com.example.electricity_management_system.sms.SmsDeliveryException;
 import com.example.electricity_management_system.sms.SmsSender;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,13 +39,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class UssdFlowTests {
 
     static final List<String[]> SENT = new ArrayList<>();
+    static volatile boolean smsDown = false;
 
     @TestConfiguration
     static class CapturingSms {
         @Bean
         @Primary
         SmsSender capturingSmsSender() {
-            return (phone, message) -> SENT.add(new String[]{phone, message});
+            return (phone, message) -> {
+                if (smsDown) {
+                    throw new SmsDeliveryException("gateway down");
+                }
+                SENT.add(new String[]{phone, message});
+            };
         }
     }
 
@@ -57,6 +64,7 @@ class UssdFlowTests {
     @BeforeEach
     void clean() {
         SENT.clear();
+        smsDown = false;
         sessions.deleteAll();
         tokens.deleteAll();
         meters.deleteAll();
@@ -162,6 +170,30 @@ class UssdFlowTests {
         dial(s, phone, code);
         assertThat(dial(s, phone, code + "*4")).contains("16-digit");
         assertThat(dial(s, phone, code + "*4*1234-5678-9012-3456")).contains("not found");
+    }
+
+    @Test
+    void smsFailureEndsLoginCleanly() throws Exception {
+        userWithMeter("+250788000006", 222222L);
+        smsDown = true;
+        String s = UUID.randomUUID().toString();
+        assertThat(dial(s, "+250788000006", "")).startsWith("END").contains("could not send your code");
+        assertThat(sessions.findById(s)).isEmpty();
+    }
+
+    @Test
+    void tokenIsStillShownWhenSmsCopyFails() throws Exception {
+        userWithMeter("+250788000007", 333333L);
+        String s = UUID.randomUUID().toString();
+        String phone = "+250788000007";
+        dial(s, phone, "");
+        String code = lastCode();
+        dial(s, phone, code);
+        dial(s, phone, code + "*2");
+        dial(s, phone, code + "*2*500");
+        smsDown = true;
+        assertThat(dial(s, phone, code + "*2*500*1")).startsWith("END Token: ").contains("SMS copy failed");
+        assertThat(tokens.findAll()).hasSize(1);
     }
 
     @Test
